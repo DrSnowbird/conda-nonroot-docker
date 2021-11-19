@@ -1,0 +1,117 @@
+#FROM debian:latest
+FROM python:3.8
+
+MAINTAINER DrSnowbird "DrSnowbird@openkbs.org"
+
+ENV DEBIAN_FRONTEND noninteractive
+
+user 0
+
+###################################
+#### ---- user: developer ---- ####
+###################################
+ENV USER_ID=${USER_ID:-1000}
+ENV GROUP_ID=${GROUP_ID:-1000}
+
+ENV USER=${USER:-developer}
+ENV HOME=/home/${USER}
+
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils sudo && \
+    useradd -ms /bin/bash ${USER} && \
+    export uid=${USER_ID} gid=${GROUP_ID} && \
+    mkdir -p /home/${USER} && \
+    mkdir -p /home/${USER}/workspace && \
+    mkdir -p /etc/sudoers.d && \
+    echo "${USER}:x:${USER_ID}:${GROUP_ID}:${USER},,,:/home/${USER}:/bin/bash" >> /etc/passwd && \
+    echo "${USER}:x:${USER_ID}:" >> /etc/group && \
+    echo "${USER} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/${USER} && \
+    chmod 0440 /etc/sudoers.d/${USER} && \
+    chown -R ${USER}:${USER} /home/${USER}
+
+###################################
+#### ---- Setup: conda3   ---- ####
+###################################
+RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
+    && curl -sSL https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/miniconda.sh \
+    && bash /tmp/miniconda.sh -bfp /usr/local \
+    && rm -rf /tmp/miniconda.sh \
+    && conda install -y python=3 \
+    && conda update conda \
+    && apt-get -qq -y autoremove \
+    && apt-get autoclean \
+    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log \
+    && conda clean --all --yes \
+    && chown $USER:$USER $HOME/.conda \
+    && echo "export PATH=\$PATH:/opt/conda/bin" >> $HOME/.bashrc
+    
+ENV PATH=$PATH:/opt/conda/bin
+
+####################################
+#### ---- Setup: Jupyter   ---- ####
+####################################
+# Install Jupyter Notebook / Lab in the base environment
+RUN yes | conda install pip && \
+    yes | conda install -c conda-forge notebook && \
+    yes | conda install -c conda-forge nb_conda_kernels && \
+    yes | conda install -c conda-forge jupyter_contrib_nbextensions
+
+#############################################
+#### ---- Setup: PyTorch cuda/gpu   ---- ####
+#############################################
+RUN yes | conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch-nightly
+
+###########################################
+#### ---- Setup: Tensorflow-gpu   ---- ####
+###########################################
+# Create Tensorflow-gpu conda env:
+RUN yes | conda create -n tf-2.0 tensorflow-gpu pip ipykernel && \
+    conda env list
+
+##################################
+#### ---- Set up Jupyter ---- ####
+##################################
+# Set up our notebook config.
+ENV JUPYTER_CONF_DIR=$HOME/.jupyter
+
+COPY --chown=${USER}:${USER} ./scripts/jupyter_notebook_config.py ${JUPYTER_CONF_DIR}/
+COPY --chown=${USER}:${USER} ./notebooks $HOME/sample-notebooks
+
+# Jupyter has issues with being run directly:
+#   https://github.com/ipython/ipython/issues/7062
+# We just add a little wrapper script.
+ADD --chown=${USER}:${USER} ./scripts $HOME/scripts
+COPY --chown=${USER}:${USER} ./scripts/run-jupyter.sh /run-jupyter.sh
+
+RUN chmod +x $HOME/scripts/*.sh /run-jupyter.sh && \
+    ls -al / $HOME
+
+# Expose Ports for TensorBoard (6006), Ipython (8888)
+#EXPOSE 6006
+EXPOSE 8888
+
+VOLUME $HOME/notebooks
+    
+########################################
+#### ---- Set up NVIDIA-Docker ---- ####
+########################################
+## ref: https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)#usage
+ENV TOKENIZERS_PARALLELISM=false
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+
+############################### 
+#### ---- Entrypoint:     ----#
+###############################
+COPY --chown=$USER ./docker-entrypoint.sh /
+#ENTRYPOINT ["/docker-entrypoint.sh"]
+
+##################################
+#### ---- start user env ---- ####
+##################################
+USER ${USER}
+WORKDIR $HOME
+
+#CMD ["/run-jupyter.sh", "notebooks", "--allow-root", "--port=8888", "--ip=0.0.0.0", "--no-browser"]
+CMD ["/run-jupyter.sh", "--allow-root"]
+#CMD ["bash"]
+
