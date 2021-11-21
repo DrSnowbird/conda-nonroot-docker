@@ -71,51 +71,27 @@ build-time:
 	--build-arg BUILD_DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"` \
 	-t $(DOCKER_IMAGE):$(VERSION) .
 
-#### ---- (Default) BUILD: conda---- ####
-build: build-conda
+build-rm:
+	docker build --force-rm --no-cache \
+	-t $(DOCKER_IMAGE):$(VERSION) .
 
-build-conda:
-	docker build -t $(DOCKER_IMAGE):$(VERSION) .
-	@echo -e "---- Done: build-conda"
-	docker images | grep 'conda'
-
-build-jupyter:
-	docker build -t $(DOCKER_IMAGE)-jupyter:latest -f Dockerfile-jupyter .
-	@echo -e "---- Done: build-jupyter"
-	docker images | grep 'conda'
-
-build-pytorch:
-	docker build -t $(DOCKER_IMAGE)-pytorch:latest -f Dockerfile-pytorch .
-	@echo -e "---- Done: build-pytorch"
-	docker images | grep 'conda'
-		
-#### ---- RUN -t $(imageTag): ---- ####
-#run:
-#	./run.sh &
-
-run-conda: build-conda
-	./run.sh
-
-run-jupyter:
-	./run.sh -t $(DOCKER_IMAGE)-jupyter
-
-run-pytorch:
-	./run.sh -t $(imageTag)-pytorch
-
+build:
+	docker build \
+	-t $(DOCKER_IMAGE):$(VERSION) .
 
 push:
-	#docker tag $(imageTag):$(VERSION) $(REGISTRY_IMAGE):$(VERSION)
-	sudo docker tag $(imageTag):latest $(REGISTRY_IMAGE):latest
-	#docker push $(REGISTRY_IMAGE):$(VERSION)
-	sudo docker push $(REGISTRY_IMAGE):latest
+	docker commit -m "$comment" ${containerID} ${imageTag}:$(VERSION)
+	docker push $(DOCKER_IMAGE):$(VERSION)
 
-save:
+	docker tag $(imageTag):$(VERSION) $(REGISTRY_IMAGE):$(VERSION)
+	#docker tag $(imageTag):latest $(REGISTRY_IMAGE):latest
+	docker push $(REGISTRY_IMAGE):$(VERSION)
+	#docker push $(REGISTRY_IMAGE):latest
 	@if [ ! "$(IMAGE_EXPORT_PATH)" = "" ]; then \
 		mkdir -p $(IMAGE_EXPORT_PATH); \
-		sudo docker save $(REGISTRY_IMAGE):latest | gzip > $(IMAGE_EXPORT_PATH)/$(APPLICATION_NAME).tar.gz; \
+		docker save $(REGISTRY_IMAGE):$(VERSION) | gzip > $(IMAGE_EXPORT_PATH)/$(DOCKER_NAME)_$(VERSION).tar.gz; \
 	fi
 	
-
 pull:
 	@if [ "$(REGISTRY_HOST)" = "" ]; then \
 		docker pull $(DOCKER_IMAGE):$(VERSION) ; \

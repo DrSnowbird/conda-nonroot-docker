@@ -1,5 +1,5 @@
-FROM debian:latest
-#FROM python:3.9
+#FROM debian:latest
+FROM python:3.8
 
 MAINTAINER DrSnowbird "DrSnowbird@openkbs.org"
 
@@ -57,7 +57,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 ############################### 
 #### ---- Entrypoint:     ----#
 ###############################
-COPY --chown=$USER:$USER ./docker-entrypoint.sh /
+COPY --chown=$USER ./docker-entrypoint.sh /
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
 ##################################

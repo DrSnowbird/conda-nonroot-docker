@@ -25,21 +25,24 @@ fi
 ## ------------------------------------------------------------------------
 BUILD_TYPE=0
 
-###################################################
-#### ---- Parse Command Line Arguments:  ---- #####
-###################################################
+####################################################
+#### ---- NVIDIA GPU Check/Setup or not:  ---- #####
+####################################################
 IS_TO_RUN_CPU=0
 IS_TO_RUN_GPU=1
 
+###################################################
+#### ---- Parse Command Line Arguments:  ---- #####
+###################################################
 
 RESTART_OPTION_VALUES=" no on-failure unless-stopped always "
-RESTART_OPTION=${RESTART_OPTION:-unless-stopped}
+RESTART_OPTION=${RESTART_OPTION:-no}
 
 ## ------------------------------------------------------------------------
-## "RUN_OPTION" values: 
-##    "-it" : (default) Interactive Container -
+## Valid "RUN_TYPE" values: 
+##    0: (default) Interactive Container -
 ##       ==> Best for Debugging Use
-##    "-d" : Detach Container / Non-Interactive 
+##    1: Detach Container / Non-Interactive 
 ##       ==> Usually, when not in debugging mode anymore, then use 1 as choice.
 ##       ==> Or, your frequent needs of the container for DEV environment Use.
 ## ------------------------------------------------------------------------
@@ -151,15 +154,16 @@ function check_NVIDIA() {
         fi
     fi
 }
-check_NVIDIA
-#### ---- NVIDIA Docker run recommendations: ----
-# NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
-#   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
-#   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
-# -ipc=host --ulimit memlock=-1 --ulimit stack=67108864
-GPU_OPTION="${GPU_OPTION} --ulimit memlock=-1 --ulimit stack=67108864 "
-echo "GPU_OPTION= ${GPU_OPTION}"
-
+if [ ${IS_TO_RUN_GPU} -gt 0 ]; then
+    check_NVIDIA
+    #### ---- NVIDIA Docker run recommendations: ----
+    # NOTE: The SHMEM allocation limit is set to the default of 64MB.  This may be
+    #   insufficient for PyTorch.  NVIDIA recommends the use of the following flags:
+    #   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 ...
+    # -ipc=host --ulimit memlock=-1 --ulimit stack=67108864
+    GPU_OPTION="${GPU_OPTION} --ulimit memlock=-1 --ulimit stack=67108864 "
+    echo "GPU_OPTION= ${GPU_OPTION}"
+fi
 echo "$@"
 
 ## ------------------------------------------------------------------------
@@ -378,11 +382,11 @@ function cutomizedVolume() {
 
 function checkHostVolumePath() {
     _left=$1
-    mkdir -p ${_left}
-    sudo chown -R $USER:$USER ${_left}
-    if [ -s ${_left} ]; then 
-        ls -al ${_left}
-    else 
+    if [ ! -s ${_left} ]; then
+        mkdir -p ${_left}
+        sudo chown -R $USER:$USER ${_left}
+    fi
+    if [ ! -s ${_left} ]; then 
         echo "*** ERROR: ${_left}: Not existing!"
     fi
 }
@@ -402,7 +406,7 @@ function generateVolumeMapping() {
             if [ "`echo $vol|grep 'volume-'`" != "" ]; then
                 cutomizedVolume $vol
             else
-                echo "************* hasColon=$hasColon"
+                debug "************* hasColon=$hasColon"
                 left=`echo $vol|cut -d':' -f1`
                 right=`echo $vol|cut -d':' -f2`
                 leftHasDot=`echo $left|grep "^\./"`
@@ -411,11 +415,11 @@ function generateVolumeMapping() {
                     debug "******** A. Left HAS Dot pattern: leftHasDot=$leftHasDot"
                     if [[ ${right} == "/"* ]]; then
                         ## -- pattern like: "./data:/containerPath/data"
-                        echo "******* A-1 -- pattern like ./data:/data --"
+                        debug "******* A-1 -- pattern like ./data:/data --"
                         VOLUME_MAP="${VOLUME_MAP} -v `pwd`/${left#./}:${right}"
                     else
                         ## -- pattern like: "./data:data"
-                        echo "******* A-2 -- pattern like ./data:data --"
+                        debug "******* A-2 -- pattern like ./data:data --"
                         VOLUME_MAP="${VOLUME_MAP} -v `pwd`/${left#./}:${DOCKER_VOLUME_DIR}/${right}"
                     fi
                     checkHostVolumePath "`pwd`/${left}"
@@ -427,11 +431,11 @@ function generateVolumeMapping() {
                         debug "******* B-1 ## Has pattern like /data on the left "
                         if [[ ${right} == "/"* ]]; then
                             ## -- pattern like: "/data:/containerPath/data"
-                            echo "****** B-1-a pattern like /data:/containerPath/data --"
+                            debug "****** B-1-a pattern like /data:/containerPath/data --"
                             VOLUME_MAP="${VOLUME_MAP} -v ${left}:${right}"
                         else
                             ## -- pattern like: "/data:data"
-                            echo "----- B-1-b pattern like /data:data --"
+                            debug "----- B-1-b pattern like /data:data --"
                             VOLUME_MAP="${VOLUME_MAP} -v ${left}:${DOCKER_VOLUME_DIR}/${right}"
                         fi
                         checkHostVolumePath "${left}"
@@ -440,7 +444,7 @@ function generateVolumeMapping() {
                         rightHasAbsPath=`echo $right|grep "^/.*"`
                         debug ">>>>>>>>>>>>> rightHasAbsPath=$rightHasAbsPath"
                         if [[ ${right} == "/"* ]]; then
-                            echo "****** B-2-a pattern like: data:/containerPath/data"
+                            debug "****** B-2-a pattern like: data:/containerPath/data"
                             debug "-- pattern like ./data:/data --"
                             VOLUME_MAP="${VOLUME_MAP} -v ${LOCAL_VOLUME_DIR}/${left}:${right}"
                         else
@@ -521,8 +525,8 @@ function generateEnvVars2() {
     done
 }
 generateEnvVars2
-echo "ENV_VARS=$ENV_VARS"
-echo "ENV_APP_RUN_CMD=$ENV_APP_RUN_CMD"
+echo ">> ENV_VARS=$ENV_VARS"
+echo ">> ENV_APP_RUN_CMD=$ENV_APP_RUN_CMD"
 
 function generateEnvVars_v2() {
     while read line; do
@@ -536,6 +540,7 @@ function generateEnvVars_v2() {
 }
 #generateEnvVars_v2
 #echo ">> ENV_VARS=$ENV_VARS"
+
 
 function generateEnvVars() {
     if [ "${1}" != "" ]; then
@@ -616,8 +621,8 @@ function generateProxyEnv() {
     fi
     ENV_VARS="${ENV_VARS} ${PROXY_PARAM}"
 }
-#generateProxyEnv
-#echo "ENV_VARS=${ENV_VARS}"
+generateProxyEnv
+echo "ENV_VARS=${ENV_VARS}"
 
 ###################################################
 #### ---- Function: Generate privilege String  ----
@@ -641,10 +646,9 @@ echo ${privilegedString}
 #### ---- Mostly, you don't need change below ----
 ###################################################
 function cleanup() {
-    containerID=`sudo docker ps -a|grep "${instanceName}" | awk '{print $1}'`
-    # if [ ! "`sudo docker ps -a|grep ${instanceName}`" == "" ]; then
+    containerID=`docker ps -a | grep "${instanceName}" | awk '{print $1}' `
     if [ "${containerID}" != "" ]; then
-         sudo docker rm -f ${containerID}
+        docker rm -f ${containerID}
     fi
 }
 
@@ -832,9 +836,18 @@ fi
 ## ----------------- main --------------------- ##
 ##################################################
 ##################################################
-set -x
 echo ">>> (final) ENV_VARS=${ENV_VARS}"
 echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+set -x
+
+########################################
+#### ---- USER: Optional setup:---- ####
+########################################
+#USER_OPTIONS="--user $(id -u):$(id -g)"
+USER_ID=`cat ${DOCKER_ENV_FILE} | grep  "^USER_ID=" | cut -d'=' -f2 | sed 's/ *$//g'`
+GROUP_ID=`cat ${DOCKER_ENV_FILE} | grep  "^GROUP_ID=" | cut -d'=' -f2 | sed 's/ *$//g'`
+USER_OPTIONS="--user ${USER_ID:-1000}:${GROUP_ID:-1000}"
+MORE_OPTIONS="${MORE_OPTIONS} ${USER_OPTIONS}"
 
 echo "args-amper:$@"
 echo "args-start:$*"
@@ -855,20 +868,7 @@ case "${BUILD_TYPE}" in
         #X11_OPTION="-e DISPLAY=$DISPLAY -v /dev/shm:/dev/shm -v /tmp/.X11-unix:/tmp/.X11-unix -e DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket"
         X11_OPTION="-e DISPLAY=$DISPLAY -v /dev/shm:/dev/shm -v /tmp/.X11-unix:/tmp/.X11-unix"
         echo "X11_OPTION=${X11_OPTION}"
-        docker run \
-            --name=${instanceName} \
-            --restart=${RESTART_OPTION} \
-            ${GPU_OPTION} \
-            ${MEDIA_OPTIONS} \
-            ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} \
-            ${X11_OPTION} \
-            ${privilegedString} \
-            ${USER_VARS} \
-            ${ENV_VARS} \
-            ${VOLUME_MAP} \
-            ${PORT_MAP} \
-            ${imageTag} \
-            $@
+        bash -c "docker run --name=${instanceName} --restart=${RESTART_OPTION} ${GPU_OPTION} ${MEDIA_OPTIONS} ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} ${X11_OPTION} ${privilegedString} ${USER_VARS} ${ENV_VARS} ${VOLUME_MAP} ${PORT_MAP} ${imageTag} $@"
         ;;
     2)
         #### 2: VNC/noVNC container build image type
@@ -880,17 +880,7 @@ case "${BUILD_TYPE}" in
             VNC_RESOLUTION=1920x1080
             ENV_VARS="${ENV_VARS} -e VNC_RESOLUTION=${VNC_RESOLUTION}" 
         fi
-        docker run \
-            --name=${instanceName} \
-            --restart=${RESTART_OPTION} \
-            ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} \
-            ${privilegedString} \
-            ${USER_VARS} \
-            ${ENV_VARS} \
-            ${VOLUME_MAP} \
-            ${PORT_MAP} \
-            ${imageTag} \
-            $@
+        bash -c "docker run --name=${instanceName} --restart=${RESTART_OPTION} ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} ${privilegedString} ${USER_VARS} ${ENV_VARS} ${VOLUME_MAP} ${PORT_MAP} ${imageTag} $@"
         ;;
 
 esac
