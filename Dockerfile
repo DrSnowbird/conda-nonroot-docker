@@ -16,7 +16,7 @@ ENV GROUP_ID=${GROUP_ID:-1000}
 ENV USER=${USER:-developer}
 ENV HOME=/home/${USER}
 
-RUN apt-get update && apt-get install -y --no-install-recommends apt-utils sudo && \
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils sudo vim && \
     useradd -ms /bin/bash ${USER} && \
     export uid=${USER_ID} gid=${GROUP_ID} && \
     mkdir -p /home/${USER} && \
@@ -43,7 +43,9 @@ RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
     && conda clean --all --yes \
     && chown $USER:$USER $HOME/.conda \
     && echo "export PATH=\$PATH:/opt/conda/bin" >> $HOME/.bashrc
-    
+
+RUN conda init bash
+
 ENV PATH=$PATH:/opt/conda/bin
     
 ########################################
