@@ -37,6 +37,11 @@ IS_TO_RUN_GPU=1
 RESTART_OPTION_VALUES=" no on-failure unless-stopped always "
 RESTART_OPTION=${RESTART_OPTION:-no}
 
+###################################################
+#### ---- Default variables setup here:   ---- ####
+###################################################
+SHM_SIZE="--shm-size=1g"
+
 ## ------------------------------------------------------------------------
 ## "RUN_OPTION" values: 
 ##    "-it" : (default) Interactive Container -
@@ -46,6 +51,11 @@ RESTART_OPTION=${RESTART_OPTION:-no}
 ##       ==> Or, your frequent needs of the container for DEV environment Use.
 ## ------------------------------------------------------------------------
 RUN_OPTION=${RUN_OPTION:-" -it "}
+
+# -- ref: using net=host will speed CPU performance ~ 20%
+# -- https://blog.gdeltproject.org/experiments-using-universal-sentence-encoder-embeddings-for-news-similarity/
+#NET_HOST="--net=host"
+NET_HOST=
 
 PARAMS=""
 while (( "$#" )); do
@@ -60,6 +70,10 @@ while (( "$#" )); do
       IS_TO_RUN_CPU=0
       IS_TO_RUN_GPU=1
       GPU_OPTION=" --gpus all "
+      shift
+      ;;
+    -n|--net-host)
+      NET_HOST="--net=host"
       shift
       ;;
     -d|--detach)
@@ -83,6 +97,18 @@ while (( "$#" )); do
       else
           echo "--- INFO: -r|--restart options: { no, on-failure, unless-stopped, always }"
           echo "Error: Unsupported value: $2"
+          exit 1
+      fi
+      ;;
+    -m|--shm-size)
+      ## Valid "shm-size" values:
+      ##  { 1g, 2g, ... etc }
+      if [ "$2" != "" ]; then
+          SHM_SIZE=" --shm-size=$2 "
+          echo ">>> SHM_SIZE: ${SHM_SIZE}"
+          shift 2
+      else
+          echo "--- INFO: -m|--shm-size options: { 1g, 2g, ... etc }"
           exit 1
       fi
       ;;
@@ -116,6 +142,8 @@ echo $@
 ## -- 2: HOST_NAME
 ## ------------------------------------------------------------------------
 HOST_USE_IP_OR_NAME=${HOST_USE_IP_OR_NAME:-1}
+
+MORE_OPTIONS=
 
 ########################################
 #### ---- NVIDIA GPU Checking: ---- ####
@@ -171,7 +199,12 @@ echo "$@"
 ##   Add any additional options here
 ## ------------------------------------------------------------------------
 #MORE_OPTIONS="--privileged=true"
-MORE_OPTIONS=
+if [ "${SHM_SIZE}" != "" ]; then
+    MORE_OPTIONS+=" "${SHM_SIZE}
+fi
+if [ "${NET_HOST}" != "" ]; then
+    MORE_OPTIONS+=" "${NET_HOST}
+fi
 
 ## ------------------------------------------------------------------------
 ## Multi-media optional values:
@@ -865,16 +898,14 @@ echo ">>> (final) ENV_VARS=${ENV_VARS}"
 echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
 echo -e ">>> (final) ENV_VARS=${ENV_VARS}"
 
-set -x
-
 MORE_OPTIONS="${MORE_OPTIONS} ${HOSTS_OPTIONS} "
 
+set -x
 case "${BUILD_TYPE}" in
     0)
         #### 0: (default) has neither X11 nor VNC/noVNC container build image type
         #### ---- for headless-based / GUI-less ---- ####
-	#bash -c "docker run --name=${instanceName}  --restart=${RESTART_OPTION}  ${REMOVE_OPTION} ${RUN_OPTION} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS}  ${privilegedString}  ${USER_OPTIONS} ${ENV_VARS} ${VOLUME_MAP}  ${PORT_MAP}  ${imageTag} $* "
-        bash -c "docker run --name=${instanceName} --restart=${RESTART_OPTION} ${GPU_OPTION} ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} ${privilegedString} ${USER_OPTIONS} ${ENV_VARS} ${VOLUME_MAP} ${PORT_MAP} ${imageTag} $@ "
+        bash -c "docker run --name=${instanceName} --restart=${RESTART_OPTION} ${GPU_OPTION} ${REMOVE_OPTION} ${RUN_OPTION} ${HOSTS_OPTIONS} ${MISC_OPTIONS} ${MORE_OPTIONS} ${CERTIFICATE_OPTIONS} ${privilegedString} ${USER_OPTIONS} ${ENV_VARS} ${VOLUME_MAP} ${PORT_MAP} ${imageTag} $@"
         ;;
     1)
         #### 1: X11/Desktip container build image type
