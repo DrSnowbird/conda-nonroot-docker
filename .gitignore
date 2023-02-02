@@ -31,6 +31,7 @@ hs_err_pid*
 
 *.pem
 *.crt
+!dummy.crt
 
 app/*copy*
 app/try*
