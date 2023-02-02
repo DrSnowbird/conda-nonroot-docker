@@ -14,6 +14,23 @@ if [ $# -lt 1 ]; then
     echo "--------------------------------------------------------"
 fi
 
+#######################################################
+#### ---- Detect: .env file existing or not! ---- #####
+#######################################################
+if [ ! -s .env ]; then
+    echo -e ">>> Detect:File: .env: -> Not found! Need to generate!"
+    bin/auto-config-all.sh
+    ls -al .env
+    echo -e "..."
+else
+    echo -e "=================================================================================="
+    echo -e ">>>> Existing .env found! If you want to overwrite it with new from .env.template:"
+    echo -e ".... Run the command below to auto-generate .env and docker-compose.yml:"
+    echo -e " "
+    echo -e ">>>> ./bin/auto-config-all.sh"
+    echo -e "=================================================================================="
+fi
+
 ###########################################################################
 #### ---- RUN Configuration (CHANGE THESE if needed!!!!)           --- ####
 ###########################################################################
@@ -156,7 +173,7 @@ MORE_OPTIONS=
 
 NVIDIA_DOCKER_AVAILABLE=0
 function check_NVIDIA() {
-    NVIDIA_PCI=`lspci | grep VGA | grep -i NVIDIA`
+    NVIDIA_PCI=`lspci | grep controller | grep -i NVIDIA`
     if [ "$NVIDIA_PCI" == "" ]; then
         echo "---- No Nvidia PCI found! No Nvidia/GPU physical card(s) available! Use CPU only!"
         GPU_OPTION=
@@ -446,7 +463,7 @@ function checkHostVolumePath() {
     _SYS_PATHS="/dev /var /etc"
     if [[ $_SYS_PATHS != *"${_left}"* ]]; then
         sudo chown -R ${USER_ID}:${USER_ID} ${_left}
-        ls -al ${_left}
+        #ls -al ${_left}
     fi
 }
 

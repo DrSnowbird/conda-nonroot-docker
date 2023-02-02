@@ -32,4 +32,8 @@ hs_err_pid*
 *.pem
 *.crt
 
-*BACKUP
+app/*copy*
+app/try*
+
+\.env
+docker-compose.yml

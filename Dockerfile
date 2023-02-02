@@ -1,5 +1,4 @@
 FROM debian:latest
-#FROM python:3.9
 
 MAINTAINER DrSnowbird "DrSnowbird@openkbs.org"
 

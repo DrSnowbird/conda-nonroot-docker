@@ -21,12 +21,16 @@ RUN python -u -m pip install --upgrade pip
 ###############################
 #### ---- App Setup:  ---- ####
 ###############################
-COPY --chown=$USER:$USER ./app $HOME/app
+COPY --chown=$USER:$USER ./app/requirements.txt $HOME/requirements.txt
 COPY --chown=$USER:$USER ./bin $HOME/bin
-RUN $HOME/bin/pre-load-virtualenv.sh && \
-    if [ -s $HOME/app/requirements.txt ]; then \
-        pip install --no-cache-dir --user -r requirements.txt ; \
+
+#RUN $HOME/bin/pre-load-virtualenv.sh && \
+
+RUN if [ -s $HOME/requirements.txt ]; then \
+        pip install --no-cache-dir --user -r $HOME/requirements.txt ; \
     fi; 
+ 
+ENV PATH=${HOME}/.local/bin:${PATH}
     
 #########################################
 ##### ---- Setup: Entry Files  ---- #####
@@ -34,7 +38,8 @@ RUN $HOME/bin/pre-load-virtualenv.sh && \
 COPY --chown=${USER}:${USER} docker-entrypoint.sh /
 COPY --chown=${USER}:${USER} ${APP_MAIN} ${APP_HOME}/setup.sh
 
-RUN sudo chmod +x /docker-entrypoint.sh ${APP_HOME}/setup.sh 
+RUN sudo chown -R ${USER}:${USER} ${APP_HOME} && \
+    sudo chmod +x /docker-entrypoint.sh ${APP_HOME}/setup.sh 
 
 #########################################
 ##### ---- Docker Entrypoint : ---- #####
@@ -53,6 +58,7 @@ USER ${USER}
 #############################################
 #############################################
 #### (you customization code here!) #########
+COPY --chown=$USER:$USER  ./app $HOME/app
 
 ######################
 #### (Test only) #####
